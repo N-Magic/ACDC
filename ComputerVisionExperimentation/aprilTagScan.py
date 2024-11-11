@@ -2,7 +2,24 @@ import cv2
 import apriltag
 import numpy as np
 
-# Initialize video capture from the default camera (index 0)
+# Constants
+TAG_SIZE = 0.065  # Size of the AprilTag in meters
+
+# Camera calibration parameters
+camera_matrix = np.array([[577.68123418, 0, 390.84042288],
+                          [0, 596.81380492, 261.04228411],
+                          [0, 0, 1]])
+dist_coeffs = np.array([[-0.02041343, 0.31564429, -0.02455964, 0.02487307, -0.34102883]])
+
+# Define 3D object points for the AprilTag corners in world coordinates
+object_point = np.array([
+    [-TAG_SIZE / 2, -TAG_SIZE / 2, 0],  # Bottom-left corner
+    [TAG_SIZE / 2, -TAG_SIZE / 2, 0],   # Bottom-right corner
+    [TAG_SIZE / 2, TAG_SIZE / 2, 0],    # Top-right corner
+    [-TAG_SIZE / 2, TAG_SIZE / 2, 0]     # Top-left corner
+], dtype=np.float32)
+
+# Initialize video capture
 cap = cv2.VideoCapture(0)
 
 # Check if the camera opened successfully
@@ -13,65 +30,72 @@ if not cap.isOpened():
 # Create an AprilTag detector
 detector = apriltag.Detector()
 
-# Set frame processing interval
-frame_counter = 0
-frame_interval = 5  # Process every 5th frame
-
-# Define the physical size of the AprilTag in meters (65 mm = 0.065 m)
-TAG_SIZE = 0.065  # 65 mm in meters
-
-# Estimate the camera focal length (in pixels)
-# Adjust this value according to your camera settings
-FOCAL_LENGTH = 600  # This may need calibration
-
-# Start capturing video frames
 while True:
-    # Capture frame-by-frame
     ret, frame = cap.read()
     
-    # If frame is read correctly, ret is True
+    if not ret:
+        print("Error: Failed to capture image.")
+        break
+import cv2
+import apriltag
+import numpy as np
+
+# Constants
+TAG_SIZE = 0.065  # Size of the AprilTag in meters
+
+# Camera calibration parameters
+camera_matrix = np.array([[577.68123418, 0, 390.84042288],
+                          [0, 596.81380492, 261.04228411],
+                          [0, 0, 1]])
+dist_coeffs = np.array([[-0.02041343, 0.31564429, -0.02455964, 0.02487307, -0.34102883]])
+
+# Define 3D object points for the AprilTag corners in world coordinates
+object_point = np.array([
+    [-TAG_SIZE / 2, -TAG_SIZE / 2, 0],  # Bottom-left corner
+    [TAG_SIZE / 2, -TAG_SIZE / 2, 0],   # Bottom-right corner
+    [TAG_SIZE / 2, TAG_SIZE / 2, 0],    # Top-right corner
+    [-TAG_SIZE / 2, TAG_SIZE / 2, 0]     # Top-left corner
+], dtype=np.float32)
+
+# Initialize video capture
+cap = cv2.VideoCapture(0)
+
+# Check if the camera opened successfully
+if not cap.isOpened():
+    print("Error: Could not open video.")
+    exit()
+
+# Create an AprilTag detector
+detector = apriltag.Detector()
+
+while True:
+    ret, frame = cap.read()
+    
     if not ret:
         print("Error: Failed to capture image.")
         break
 
-    # Only process every 5th frame
-    if frame_counter % frame_interval == 0:
-        # Convert frame to grayscale for the AprilTag detector
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Use the original frame without undistortion
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    detections = detector.detect(gray_frame)
 
-        # Detect AprilTags
-        detections = detector.detect(gray_frame)
+    # Draw detections on the frame
+    for detection in detections:
+        for i in range(4):
+            pt1 = tuple(map(int, detection.corners[i]))
+            pt2 = tuple(map(int, detection.corners[(i + 1) % 4]))
+            cv2.line(frame, pt1, pt2, (0, 255, 0), 2)
 
-        # Draw detections and display tag info
-        for detection in detections:
-            # Draw a bounding box around the detected AprilTag
-            for i in range(4):
-                pt1 = tuple(map(int, detection.corners[i]))
-                pt2 = tuple(map(int, detection.corners[(i + 1) % 4]))
-                cv2.line(frame, pt1, pt2, (0, 255, 0), 2)
+        # Get the detected tag ID
+        tag_id = detection.tag_id
+        print(f"Detected Tag ID: {tag_id}")
 
-            # Calculate the size of the tag in pixels
-            width = np.linalg.norm(detection.corners[0] - detection.corners[1])
-            # Calculate distance to the AprilTag
-            distance = (TAG_SIZE * FOCAL_LENGTH) / width
+    cv2.imshow('Camera Feed', frame)
 
-            # Display tag ID and distance at the center of the AprilTag
-            tag_center = tuple(map(int, detection.center))
-            cv2.putText(frame, f'ID: {detection.tag_id}', tag_center,
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-            cv2.putText(frame, f'Distance: {distance:.2f} m', (tag_center[0], tag_center[1] + 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-        # Display the resulting frame
-        cv2.imshow('Camera Feed with AprilTag Detection', frame)
-    
-    # Increment the frame counter
-    frame_counter += 1
-
-    # Press 'q' to exit the camera feed
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if cv2.waitKey(1) == ord('q'):
         break
 
-# Release the capture and close the window
+# Release the capture
 cap.release()
 cv2.destroyAllWindows()
+
